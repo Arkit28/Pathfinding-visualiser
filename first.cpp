@@ -4,6 +4,45 @@
 #include <utility>
 #include <limits>
 #include <chrono>
+#include <thread> 
+
+namespace ansi {
+    constexpr const char* CLEAR = "\x1b[2J";
+    constexpr const char* HOME = "\x1b[H";
+    constexpr const char* HIDE = "\x1b[?25l";
+    constexpr const char* SHOW = "\x1b[25h";
+    constexpr const char* RESET = "\x1b[0m";
+    constexpr const char* WALLC = "\x1b[32m";
+    constexpr const char* STARTC = "\x1b[32m";
+    constexpr const char* ENDC = "\x1b[31m";
+    constexpr const char* VISITC = "\x1b[34m";
+    constexpr const char* PATHC = "\x1b[33m";    
+}
+
+inline void clearConsole() {
+    std::cout << ansi::CLEAR << ansi::HOME;
+}
+
+inline void showCursor(bool on){
+    std::cout << (on ? ansi::SHOW : ansi::HIDE);
+}
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+void enableANSI(){
+#ifdef _WIN32
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if(hOut != INVALID_HANDLE_VALUE){
+        DWORD dwMode = 0;
+        if(GetConsoleMode(hOut, &dwMode)){
+            SetConsoleMode(hOut, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+    }
+#endif
+}
+
 
 enum CellType {
     EMPTY = 0,
@@ -44,9 +83,34 @@ void printGrid(const std::vector<std::vector<int>>& grid){
             else if (grid[r][c] == VISITED) std::cout << "o ";
             else std::cout << ". ";
         }
-        std::cout << "\n";  // <-- newline after finishing one row
+        std::cout << "\n";  
     }
     std::cout << "\n";
+}
+
+void printGridColoured(const std::vector<std::vector<int>>& grid){
+    for(int r = 0; r < ROWS; r++){
+        for(int c = 0; c < COLS; c++){
+            switch(grid[r][c]){
+                case START: std::cout << ansi::STARTC << "S " << ansi::RESET; break;
+                case END:   std::cout << ansi::ENDC << "E " << ansi::RESET; break;
+                case WALL:  std::cout << ansi::WALLC << "# " << ansi::RESET; break;
+                case PATH:  std::cout << ansi::PATHC << "* " << ansi::RESET; break;
+                case VISITED: std::cout << ansi::VISITC << "o " << ansi::RESET; break;
+                default: std::cout << ". "; 
+            }
+        }
+        std::cout << "\n";
+    }
+}
+
+void renderFrame(const char* title, int visitedCount, int delay_ms){
+    std::cout << ansi::HOME;
+    std::cout << title << "\n\n";
+    printGridColoured(grid);
+    std::cout << "\nVisited: " << visitedCount << "\n";
+    std::cout.flush();
+    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
 }
 
 
@@ -56,7 +120,7 @@ bool isValid(const int r, const int c){
 }
 
 // Breadth first search algo as benchmark
-bool bfs(const std::pair<int, int> start, const std::pair<int, int> end){
+int bfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool animate=true, int delay_ms=50){
     std::queue<std::pair<int, int>> q;
     std::vector<std::vector<bool>> visited(ROWS, std::vector<bool>(COLS, false));
     std::vector<std::vector<std::pair<int, int>>> parent(ROWS, std::vector<std::pair<int, int>>(COLS, {-1, -1}));
@@ -74,15 +138,21 @@ bool bfs(const std::pair<int, int> start, const std::pair<int, int> end){
 
         visited_nodes++;
 
+        if(animate){
+            renderFrame("BFS", visited_nodes, delay_ms);
+        }
+
         if(std::make_pair(r, c) == end){
 
             std::pair<int, int> current = end;
             while(current != start){
                 grid[current.first][current.second] = PATH;
                 current = parent[current.first][current.second];
+                if(animate){
+                    renderFrame("BFS - path construction through backtracking", visited_nodes, delay_ms);
+                }
             }
-            std::cout << "Visited cells: " << visited_nodes << std::endl;
-            return true;
+            return visited_nodes;
 
         }
         for(int i = 0; i < 4; i++){
@@ -94,11 +164,13 @@ bool bfs(const std::pair<int, int> start, const std::pair<int, int> end){
                 parent[nr][nc] = {r, c};
                 q.push({nr, nc});
                 grid[nr][nc] = VISITED;
+                if(animate){
+                    renderFrame("BFS", visited_nodes, delay_ms);
+                }
             } 
         }
     }
-    std::cout << "visited nodes: " << visited_nodes << std::endl;
-    return false;
+    return visited_nodes;
 }
 
 // Dijkstra's algorithm next
@@ -111,7 +183,7 @@ int getCost(const int r, const int c){
     return 1;                 // for current simplicity, cost is uniform
 }
 
-bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end){
+bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end, bool animate=true, int delay_ms=50){
     using Node = std::pair<int, std::pair<int, int>>;    //grouping weight, (x-coord, y-coord)
 
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
@@ -131,6 +203,9 @@ bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end){
         int c = pos.second;
 
         visited_nodes++;
+        if(animate){
+            renderFrame("Dijkstra", visited_nodes, delay_ms);
+        }
 
         //backtrack by following parent cells to form PATH
         if(std::make_pair(r,c) == end){
@@ -138,9 +213,11 @@ bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end){
             while(current != start){
                 grid[current.first][current.second] = PATH;
                 current = parent[current.first][current.second];
+                if(animate){
+                renderFrame("Dijkstra - Path reconstruction through backtracking", visited_nodes, delay_ms);
+                }
             }
-            std::cout << "Visited nodes: " << visited_nodes << std::endl;
-            return true;
+            return visited_nodes;
         }
         
         if(d > distance[r][c]){
@@ -157,12 +234,15 @@ bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end){
                     parent[nr][nc] = {r, c};
                     pq.push({newDist, {nr, nc}});
                     grid[nr][nc] = VISITED;
+                    if(animate){
+                        renderFrame("Dijkstra ", visited_nodes, delay_ms);
+                    }
                 }
             }
         }
     }
-    std::cout << "Visited nodes: " << visited_nodes << std::endl;
-    return false;
+    return visited_nodes;
+
 
 }
 
@@ -175,7 +255,7 @@ int heuristic(const std::pair<int, int>& a, const std::pair<int,int>& b){
     return std::abs(a.first - b.first) + std::abs(a.second - b.second);
 }
 
-bool astar(const std::pair<int,int> start, const std::pair<int,int> end){
+bool astar(const std::pair<int,int>& start, const std::pair<int,int>& end, bool animate=true, int delay_ms=50){
     using Node = std::pair<int, std::pair<int,int>>;   // group cost and coordinates
 
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
@@ -194,15 +274,21 @@ bool astar(const std::pair<int,int> start, const std::pair<int,int> end){
         int r = pos.first, c = pos.second;
 
         visited_nodes++;
+        if(animate){
+            renderFrame("A* ", visited_nodes, delay_ms);
+        }
 
         if(std::make_pair(r, c) == end){
             std::pair<int,int> current = end;
             while(current != start){
                 grid[current.first][current.second] = PATH;
                 current = parent[current.first][current.second];
+                if(animate){
+                    renderFrame("A* - Path reconstruction through backtracking", visited_nodes, delay_ms);
+                }
             }
-            std::cout << "Visited nodes: " << visited_nodes << std::endl;
-            return true;
+            return visited_nodes;
+
         }
         
         for(int i = 0; i < 4; i++){
@@ -217,25 +303,49 @@ bool astar(const std::pair<int,int> start, const std::pair<int,int> end){
                     parent[nr][nc] = {r,c};
                     pq.push({fScore, {nr,nc}});
                     grid[nr][nc] = VISITED;
+                    if(animate){
+                        renderFrame("A* ", visited_nodes, delay_ms);
+                    }
                 }
             }
         
         }
     
-    }
-    std::cout << "Visited nodes: " << visited_nodes << std::endl;
-    return false;
+    }   
+    return visited_nodes;
 
+}
 
+template<typename Function>
+
+void AlgorithmEvaluation(const std::string& name, Function algorithm){
+    auto gridCopy = grid;
+    resetGrid();
+
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    int visitedCount = algorithm(startNode, endNode, true, 0); // disable animiation while evaluating speed
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+
+    std::cout <<  name << " Result \n";
+    printGridColoured(grid);
+    std::cout << "Visited Nodes: " << visitedCount << "\n";
+    std::cout << "Time Taken: " << duration << "us\n\n\n";
 }
 
 
 
 int main() {
 
+    enableANSI();
+    std::cout << std::string(3, '\n');
+
     grid[startNode.first][startNode.second] = START;
     grid[endNode.first][endNode.second] = END;
 
+    //wall placements:
     grid[0][2] = WALL; grid[0][3] = WALL; grid[0][7] = WALL;
     grid[1][2] = WALL; grid[1][5] = WALL; grid[1][7] = WALL;
     grid[2][1] = WALL; grid[2][2] = WALL; grid[2][4] = WALL; grid[2][5] = WALL;
@@ -247,8 +357,29 @@ int main() {
     grid[8][1] = WALL; grid[8][2] = WALL; grid[8][3] = WALL; grid[8][4] = WALL;
     grid[8][5] = WALL; grid[8][6] = WALL; grid[8][7] = WALL; grid[8][8] = WALL;
 
+    
+    
+    
+    showCursor(false);
 
-    std::cout << "Initial Grid \n";
+    std::cout << "Initial Grid\n";
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    printGridColoured(grid);
+
+
+    AlgorithmEvaluation("BFS", bfs);
+    AlgorithmEvaluation("Dijkstra", dijkstra);
+    AlgorithmEvaluation("A*", astar);
+    
+
+
+    showCursor(true);
+    
+}
+
+
+/*
+std::cout << "Initial Grid \n";
     printGrid(grid);
 
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -271,5 +402,4 @@ int main() {
     resetGrid();
 
     return 0;
-
-}
+*/ 
