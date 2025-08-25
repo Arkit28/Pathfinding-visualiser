@@ -5,6 +5,7 @@
 #include <limits>
 #include <chrono>
 #include <thread> 
+#include <stack>
 
 namespace ansi {
     constexpr const char* CLEAR = "\x1b[2J";
@@ -173,6 +174,56 @@ int bfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool a
     return visited_nodes;
 }
 
+
+int dfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool animate=true, int delay_ms=50){
+    using Node = std::pair<int, std::pair<int,int>>;
+    std::stack<std::pair<int,int>> st;
+    std::vector<std::vector<bool>> visited(ROWS, std::vector<bool>(COLS, false));
+    std::vector<std::vector<std::pair<int, int>>> parent(ROWS, std::vector<std::pair<int, int>>(COLS, {-1, -1}));
+
+    st.push( startNode);
+    visited[start.first][start.second] = true;
+    parent[start.first][start.second] = {-1,-1};
+    int visited_nodes = 0;
+
+    int dr[] = {-1, 1, 0 , 0};
+    int dc[] = {0, 0, -1, 1};
+
+    while(!st.empty()){
+        auto [x, y] = st.top(); st.pop();
+
+        visited_nodes++;
+
+        if(std::make_pair(x, y) == end){
+            std::pair<int,int> current = end;
+            while(current != start){
+                grid[current.first][current.second] = PATH;
+                current = parent[current.first][current.second];
+                if(animate){
+                    renderFrame("DFS Path reconstruction through backtracking", visited_nodes, delay_ms);
+                }
+                return visited_nodes;
+
+            }
+        }
+
+        for(int i = 0; i < 4; i++){
+            int nx = x + dr[i], ny = y + dc[i];
+            if(isValid(nx, ny) && !visited[nx][ny]){
+                visited[nx][ny] = true;
+                st.push({nx,ny});
+                parent[nx][ny] = {x,y};
+                grid[nx][ny] = VISITED;
+                if(animate){
+                    renderFrame("DFS", visited_nodes, delay_ms);
+                }
+
+            }
+        }
+    }
+    return visited_nodes;
+}
+
 // Dijkstra's algorithm next
 // need to add weights to grid and use a min-pritority queue 
 
@@ -216,6 +267,7 @@ bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end, bo
                 if(animate){
                 renderFrame("Dijkstra - Path reconstruction through backtracking", visited_nodes, delay_ms);
                 }
+                
             }
             return visited_nodes;
         }
@@ -322,17 +374,35 @@ void AlgorithmEvaluation(const std::string& name, Function algorithm){
     auto gridCopy = grid;
     resetGrid();
 
-    auto startTime = std::chrono::high_resolution_clock::now();
+    std::cout << "\n " << name << " Algorithm \n";
+    std::cout << "Press Enter to start...";
+    std::cin.get();
 
-    int visitedCount = algorithm(startNode, endNode, true, 0); // disable animiation while evaluating speed
+    clearConsole();
+
+    auto startTime = std::chrono::high_resolution_clock::now();
+    
+    int visitedCount = algorithm(startNode, endNode, true, 100); // 100ms delay for better visibility
+    
 
     auto endTime = std::chrono::high_resolution_clock::now();
+    
+    // Use microseconds for more precise timing
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
 
-    std::cout <<  name << " Result \n";
+    std::cout << "\n" << name << " Results:\n";
     printGridColoured(grid);
     std::cout << "Visited Nodes: " << visitedCount << "\n";
-    std::cout << "Time Taken: " << duration << "us\n\n\n";
+    
+    if(duration >= 1000){
+        std::cout << "Time Taken: " << duration / 1000.0 << " ms\n";
+    } 
+    else{
+        std::cout << "Time Taken: " << duration << " μs\n";
+    }
+    
+    std::cout << "\nPress Enter to continue...";
+    std::cin.get();
 }
 
 
@@ -366,11 +436,11 @@ int main() {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     printGridColoured(grid);
 
-
+    
     AlgorithmEvaluation("BFS", bfs);
+    AlgorithmEvaluation("DFS", dfs);
     AlgorithmEvaluation("Dijkstra", dijkstra);
     AlgorithmEvaluation("A*", astar);
-    
 
 
     showCursor(true);
