@@ -5,7 +5,11 @@
 #include <limits>
 #include <chrono>
 #include <thread> 
+#include <cstdlib>
+#include <ctime>
 #include <stack>
+#include <algorithm>
+#include <random>
 
 namespace ansi {
     constexpr const char* CLEAR = "\x1b[2J";
@@ -14,7 +18,7 @@ namespace ansi {
     constexpr const char* SHOW = "\x1b[25h";
     constexpr const char* RESET = "\x1b[0m";
     constexpr const char* WALLC = "\x1b[32m";
-    constexpr const char* STARTC = "\x1b[32m";
+    constexpr const char* STARTC = "\x1b[31m";
     constexpr const char* ENDC = "\x1b[31m";
     constexpr const char* VISITC = "\x1b[34m";
     constexpr const char* PATHC = "\x1b[33m";    
@@ -55,13 +59,13 @@ enum CellType {
 };
 
 // 10 x 10 grid
-const int ROWS = 10;
-const int COLS = 10;
+const int ROWS = 25;
+const int COLS = 25;
 
 std::vector<std::vector<int>> grid(ROWS, std::vector<int>(COLS, EMPTY));
 
 std::pair<int, int> startNode{0, 0}; 
-std::pair<int, int> endNode{9, 9};
+std::pair<int, int> endNode{24, 24};
 
 void resetGrid(){
     for(int r = 0; r < ROWS; r++){
@@ -105,13 +109,13 @@ void printGridColoured(const std::vector<std::vector<int>>& grid){
     }
 }
 
-void renderFrame(const char* title, int visitedCount, int delay_ms){
+void renderFrame(const char* title, int visitedCount, int delay_us){
     std::cout << ansi::HOME;
     std::cout << title << "\n\n";
     printGridColoured(grid);
     std::cout << "\nVisited: " << visitedCount << "\n";
     std::cout.flush();
-    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+    std::this_thread::sleep_for(std::chrono::microseconds(delay_us));
 }
 
 
@@ -121,7 +125,7 @@ bool isValid(const int r, const int c){
 }
 
 // Breadth first search algo as benchmark
-int bfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool animate=true, int delay_ms=50){
+int bfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool animate=true, int delay_us=50){
     std::queue<std::pair<int, int>> q;
     std::vector<std::vector<bool>> visited(ROWS, std::vector<bool>(COLS, false));
     std::vector<std::vector<std::pair<int, int>>> parent(ROWS, std::vector<std::pair<int, int>>(COLS, {-1, -1}));
@@ -140,7 +144,7 @@ int bfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool a
         visited_nodes++;
 
         if(animate){
-            renderFrame("BFS", visited_nodes, delay_ms);
+            renderFrame("BFS", visited_nodes, delay_us);
         }
 
         if(std::make_pair(r, c) == end){
@@ -150,7 +154,7 @@ int bfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool a
                 grid[current.first][current.second] = PATH;
                 current = parent[current.first][current.second];
                 if(animate){
-                    renderFrame("BFS - path construction through backtracking", visited_nodes, delay_ms);
+                    renderFrame("BFS - path construction through backtracking", visited_nodes, delay_us);
                 }
             }
             return visited_nodes;
@@ -166,7 +170,7 @@ int bfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool a
                 q.push({nr, nc});
                 grid[nr][nc] = VISITED;
                 if(animate){
-                    renderFrame("BFS", visited_nodes, delay_ms);
+                    renderFrame("BFS", visited_nodes, delay_us);
                 }
             } 
         }
@@ -175,7 +179,7 @@ int bfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool a
 }
 
 
-int dfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool animate=true, int delay_ms=50){
+int dfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool animate=true, int delay_us=50){
     using Node = std::pair<int, std::pair<int,int>>;
     std::stack<std::pair<int,int>> st;
     std::vector<std::vector<bool>> visited(ROWS, std::vector<bool>(COLS, false));
@@ -200,11 +204,11 @@ int dfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool a
                 grid[current.first][current.second] = PATH;
                 current = parent[current.first][current.second];
                 if(animate){
-                    renderFrame("DFS Path reconstruction through backtracking", visited_nodes, delay_ms);
+                    renderFrame("DFS Path reconstruction through backtracking", visited_nodes, delay_us);
                 }
-                return visited_nodes;
-
             }
+            return visited_nodes;
+
         }
 
         for(int i = 0; i < 4; i++){
@@ -215,7 +219,7 @@ int dfs(const std::pair<int, int>& start, const std::pair<int, int>& end, bool a
                 parent[nx][ny] = {x,y};
                 grid[nx][ny] = VISITED;
                 if(animate){
-                    renderFrame("DFS", visited_nodes, delay_ms);
+                    renderFrame("DFS", visited_nodes, delay_us);
                 }
 
             }
@@ -234,7 +238,7 @@ int getCost(const int r, const int c){
     return 1;                 // for current simplicity, cost is uniform
 }
 
-bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end, bool animate=true, int delay_ms=50){
+bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end, bool animate=true, int delay_us=50){
     using Node = std::pair<int, std::pair<int, int>>;    //grouping weight, (x-coord, y-coord)
 
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
@@ -255,7 +259,7 @@ bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end, bo
 
         visited_nodes++;
         if(animate){
-            renderFrame("Dijkstra", visited_nodes, delay_ms);
+            renderFrame("Dijkstra", visited_nodes, delay_us);
         }
 
         //backtrack by following parent cells to form PATH
@@ -265,7 +269,7 @@ bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end, bo
                 grid[current.first][current.second] = PATH;
                 current = parent[current.first][current.second];
                 if(animate){
-                renderFrame("Dijkstra - Path reconstruction through backtracking", visited_nodes, delay_ms);
+                renderFrame("Dijkstra - Path reconstruction through backtracking", visited_nodes, delay_us);
                 }
                 
             }
@@ -287,7 +291,7 @@ bool dijkstra(const std::pair<int, int> start, const std::pair<int, int> end, bo
                     pq.push({newDist, {nr, nc}});
                     grid[nr][nc] = VISITED;
                     if(animate){
-                        renderFrame("Dijkstra ", visited_nodes, delay_ms);
+                        renderFrame("Dijkstra ", visited_nodes, delay_us);
                     }
                 }
             }
@@ -307,7 +311,7 @@ int heuristic(const std::pair<int, int>& a, const std::pair<int,int>& b){
     return std::abs(a.first - b.first) + std::abs(a.second - b.second);
 }
 
-bool astar(const std::pair<int,int>& start, const std::pair<int,int>& end, bool animate=true, int delay_ms=50){
+bool astar(const std::pair<int,int>& start, const std::pair<int,int>& end, bool animate=true, int delay_us=50){
     using Node = std::pair<int, std::pair<int,int>>;   // group cost and coordinates
 
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
@@ -327,7 +331,7 @@ bool astar(const std::pair<int,int>& start, const std::pair<int,int>& end, bool 
 
         visited_nodes++;
         if(animate){
-            renderFrame("A* ", visited_nodes, delay_ms);
+            renderFrame("A* ", visited_nodes, delay_us);
         }
 
         if(std::make_pair(r, c) == end){
@@ -336,7 +340,7 @@ bool astar(const std::pair<int,int>& start, const std::pair<int,int>& end, bool 
                 grid[current.first][current.second] = PATH;
                 current = parent[current.first][current.second];
                 if(animate){
-                    renderFrame("A* - Path reconstruction through backtracking", visited_nodes, delay_ms);
+                    renderFrame("A* - Path reconstruction through backtracking", visited_nodes, delay_us);
                 }
             }
             return visited_nodes;
@@ -356,7 +360,7 @@ bool astar(const std::pair<int,int>& start, const std::pair<int,int>& end, bool 
                     pq.push({fScore, {nr,nc}});
                     grid[nr][nc] = VISITED;
                     if(animate){
-                        renderFrame("A* ", visited_nodes, delay_ms);
+                        renderFrame("A* ", visited_nodes, delay_us);
                     }
                 }
             }
@@ -367,6 +371,78 @@ bool astar(const std::pair<int,int>& start, const std::pair<int,int>& end, bool 
     return visited_nodes;
 
 }
+
+bool inBounds(int r, int c){
+    return r >= 0 && r < ROWS && c >= 0 && c < COLS;
+}
+
+void MazeGeneration() {
+    int dr [] = {-2, 2, 0 , 0};
+    int dc [] = {0, 0, -2, 2};
+
+    // fill grid with walls
+    for(int i = 0; i < ROWS; i++){
+        for(int j = 0; j < COLS; j++){
+            grid[i][j] = WALL;
+        }
+    }
+
+    std::stack<std::pair<int, int>> st;
+    st.push(startNode);
+    grid[startNode.first][startNode.second] = EMPTY;
+
+    bool reachedEnd = false;
+
+    static std::default_random_engine rng(static_cast<unsigned>(std::time(nullptr)));
+
+    while(!st.empty()){
+        auto [r, c] = st.top();
+        if(std::make_pair(r, c) == endNode) {
+            reachedEnd = true; // ✅ mark end reached
+        }
+
+        std::vector<int> dirs = {0, 1, 2, 3};
+        std::shuffle(dirs.begin(), dirs.end(), rng);
+
+        bool moved = false;
+        for(int d : dirs){
+            int nr = r + dr[d];
+            int nc = c + dc[d];
+            if(inBounds(nr, nc) && grid[nr][nc] == WALL){
+                grid[r + dr[d]/2][c + dc[d]/2] = EMPTY;
+                grid[nr][nc] = EMPTY;
+                st.push({nr, nc});
+                moved = true;
+                break;
+            }
+        }
+        if(!moved){
+            st.pop();
+        }
+    }
+
+    // Make sure start/end are visible
+    grid[startNode.first][startNode.second] = START;
+    grid[endNode.first][endNode.second] = END;
+
+    // ✅ If the end wasn’t reached during carving, force-connect it
+    if(!reachedEnd){
+        // Simple way: carve a direct corridor between start and end
+        int r = startNode.first, c = startNode.second;
+        while(r != endNode.first){
+            r += (endNode.first > r ? 1 : -1);
+            grid[r][c] = EMPTY;
+        }
+        while(c != endNode.second){
+            c += (endNode.second > c ? 1 : -1);
+            grid[r][c] = EMPTY;
+        }
+        grid[startNode.first][startNode.second] = START;
+        grid[endNode.first][endNode.second] = END;
+    }
+}
+
+
 
 template<typename Function>
 
@@ -415,20 +491,7 @@ int main() {
     grid[startNode.first][startNode.second] = START;
     grid[endNode.first][endNode.second] = END;
 
-    //wall placements:
-    grid[0][2] = WALL; grid[0][3] = WALL; grid[0][7] = WALL;
-    grid[1][2] = WALL; grid[1][5] = WALL; grid[1][7] = WALL;
-    grid[2][1] = WALL; grid[2][2] = WALL; grid[2][4] = WALL; grid[2][5] = WALL;
-    grid[3][1] = WALL; grid[3][6] = WALL; grid[3][7] = WALL;
-    grid[4][1] = WALL; grid[4][3] = WALL; grid[4][4] = WALL; grid[4][8] = WALL;
-    grid[5][3] = WALL; grid[5][6] = WALL;
-    grid[6][0] = WALL; grid[6][1] = WALL; grid[6][3] = WALL; grid[6][5] = WALL; grid[6][6] = WALL; grid[6][8] = WALL;
-    // no walls on row 7
-    grid[8][1] = WALL; grid[8][2] = WALL; grid[8][3] = WALL; grid[8][4] = WALL;
-    grid[8][5] = WALL; grid[8][6] = WALL; grid[8][7] = WALL; grid[8][8] = WALL;
-
-    
-    
+    MazeGeneration();
     
     showCursor(false);
 
@@ -471,5 +534,15 @@ std::cout << "Initial Grid \n";
     printGrid(grid);
     resetGrid();
 
-    return 0;
+    //wall placements:
+    grid[0][2] = WALL; grid[0][3] = WALL; grid[0][7] = WALL;
+    grid[1][2] = WALL; grid[1][5] = WALL; grid[1][7] = WALL;
+    grid[2][1] = WALL; grid[2][2] = WALL; grid[2][4] = WALL; grid[2][5] = WALL;
+    grid[3][1] = WALL; grid[3][6] = WALL; grid[3][7] = WALL;
+    grid[4][1] = WALL; grid[4][3] = WALL; grid[4][4] = WALL; grid[4][8] = WALL;
+    grid[5][3] = WALL; grid[5][6] = WALL;
+    grid[6][0] = WALL; grid[6][1] = WALL; grid[6][3] = WALL; grid[6][5] = WALL; grid[6][6] = WALL; grid[6][8] = WALL;
+    // no walls on row 7
+    grid[8][1] = WALL; grid[8][2] = WALL; grid[8][3] = WALL; grid[8][4] = WALL;
+    grid[8][5] = WALL; grid[8][6] = WALL; grid[8][7] = WALL; grid[8][8] = WALL;
 */ 
